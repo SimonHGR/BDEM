@@ -50,12 +50,15 @@ void idle() {}
 
 void (* volatile isr)() = idle;
 volatile int lifeCounter = 0;
+volatile int currentPosition = 0;
 
 // trigger the motor routine 
 void stepMotor()
 {
   digitalWrite(STEP_PIN, HIGH);
   digitalWrite(STEP_PIN, LOW);
+  int offset = digitalRead(DIRECTION_PIN) == 0 ? -1 : 1;
+  currentPosition += offset;
 }
 
 // stepping until stop pin
@@ -63,6 +66,7 @@ void stepToStopISR() {
   stepMotor();
   if (digitalRead(STOP_PIN) == 0) {
     setModeWaitToStart();
+    currentPosition = 0;
   }
 }
 
@@ -182,6 +186,9 @@ void loop() {
         setModeRewinding();
       } else if (strcmp(inData, "run") == 0) {
         setModeRunning();
+      } else if (strcmp(inData, "pos") == 0) {
+        Serial.print("Position: " );
+        Serial.println(currentPosition);
       }
       dataCount = 0;
     } else {
