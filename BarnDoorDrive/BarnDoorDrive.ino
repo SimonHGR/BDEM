@@ -86,7 +86,7 @@ ISR(TIMER1_COMPA_vect)
   if (lifeCounter % 16 == 0) {
       digitalWrite(LED_PIN, digitalRead(LED_PIN) ^ 1);
   }
-  // call supporting behavior
+  // call supporting mode behavior
   (*isr)();
 }
 
@@ -99,64 +99,45 @@ void startMotorInterrupts() {
 }
 
 void motorControl(int direction, int speed) {
-//  Serial.print("motor control ");
   int dirBit = (direction == MOTOR_OUT) ? 1 : 0;
-//  Serial.print("direction is ");
-//  Serial.println(dirBit);
   digitalWrite(DIRECTION_PIN, dirBit);
   int tccr1bTemplate = TCCR1B & TCCR1B_PRESCALE_MASK;
-//  Serial.print("tccr1bTemplate ");
-//  Serial.println(tccr1bTemplate);
   if (speed == MOTOR_FAST) {
     TCCR1A = 0;
     OCR1A = fastMotorOCR1A;
     TCNT1 = 0;
     tccr1bTemplate |= fastMotorPrescale;
     TCCR1B = tccr1bTemplate;
-    Serial.print("(fast) tccr1b => ");
-    Serial.println(tccr1bTemplate);
   } else {
     TCCR1A = 0;
     OCR1A = slowMotorOCR1A;
     TCNT1 = 0;
     tccr1bTemplate |= slowMotorPrescale;
     TCCR1B = tccr1bTemplate;
-    Serial.print("(slow) tccr1b => ");
-    Serial.println(tccr1bTemplate);
   }
 }
 
-//void modeResetPosition() {
-//  motorControl(MOTOR_RETURN, MOTOR_FAST);
-//  // await input from limit switch
-//  // then stop motor
-//  // set mode "idle"
-//}
-
 void setModeRewinding() {
-//  noInterrupts();
+  Serial.println("Rewinding mode...");
   motorControl(MOTOR_RETURN, MOTOR_FAST);
   isr = stepToStopISR;
-//  interrupts();
 }
 
 void setModeWaitToStart() {
-//  noInterrupts();
+  Serial.println("Wait for start mode...");
   motorControl(MOTOR_OUT, MOTOR_SLOW); // get ready
   isr = waitToStartISR;
-//  interrupts();
 }
 
 void setModeRunning() {
-//  noInterrupts();
+  Serial.println("Normal run mode...");
   motorControl(MOTOR_OUT, MOTOR_SLOW);
   isr = stepToControlISR;
-//  interrupts();
 }
 
 void setup() {
   Serial.begin(9600);
-  Serial.println("Say Something");
+  Serial.println("Command (stop, rew, run):");
 
   pinMode(LED_PIN, OUTPUT);
   pinMode(DIRECTION_PIN, OUTPUT);
@@ -186,10 +167,7 @@ void loop() {
     char charRead = Serial.read();
     if (charRead == 0x0A || charRead == 0x0D) {
       inData[dataCount] = 0;
-      Serial.print("\nYou said ");
-      Serial.print(inData);
       if (strcmp(inData, "stop") == 0) {
-        Serial.println("stopping...");
         setModeWaitToStart();
       } else if (strcmp(inData, "rew") == 0) {
         setModeRewinding();
