@@ -43,6 +43,9 @@ void stepMotor()
   digitalWrite(STEP_PIN, LOW);
 }
 
+// null routine
+void idle() {}
+
 void (* volatile isr)() = stepMotor;
 volatile int lifeCounter = 0;
 
@@ -50,7 +53,7 @@ volatile int lifeCounter = 0;
 ISR(TIMER1_COMPA_vect)
 {
   lifeCounter++;
-  if (lifeCounter % 8 == 0) {
+  if (lifeCounter % 16 == 0) {
       digitalWrite(LED_PIN, digitalRead(LED_PIN) ^ 1);
   }
   // call supporting behavior
@@ -65,8 +68,7 @@ void startMotorInterrupts() {
   TIMSK1 |= (1 << OCIE1A);
 }
 
-void motorStart(int direction, int speed) {
-  noInterrupts();
+void motorControl(int direction, int speed) {
   if (speed == MOTOR_STOP) {
     Serial.println("Stopping!");
     stopMotorInterrupts();
@@ -98,11 +100,10 @@ void motorStart(int direction, int speed) {
     }
     startMotorInterrupts();
   }
-  interrupts();
 }
 
 void modeResetPosition() {
-  motorStart(MOTOR_RETURN, MOTOR_FAST);
+  motorControl(MOTOR_RETURN, MOTOR_FAST);
   // await input from limit switch
   // then stop motor
   // set mode "idle"
@@ -123,7 +124,6 @@ void setup() {
   digitalWrite(STEP_SIZE_MS2_PIN, LOW);
   digitalWrite(STEP_SIZE_MS3_PIN, LOW);
 
-  // Set mode "resetting position"
   modeResetPosition();
 }
 
@@ -139,11 +139,11 @@ void loop() {
       Serial.print(inData);
       if (strcmp(inData, "stop") == 0) {
         Serial.println("stopping...");
-        motorStart(MOTOR_OUT, MOTOR_STOP);
+        motorControl(MOTOR_OUT, MOTOR_STOP);
       } else if (strcmp(inData, "ff") == 0) {
-        motorStart(MOTOR_RETURN, MOTOR_FAST);
+        motorControl(MOTOR_RETURN, MOTOR_FAST);
       } else if (strcmp(inData, "sr") == 0) {
-        motorStart(MOTOR_OUT, MOTOR_SLOW);
+        motorControl(MOTOR_OUT, MOTOR_SLOW);
       }
       dataCount = 0;
     } else {
