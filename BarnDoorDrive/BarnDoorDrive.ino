@@ -3,7 +3,6 @@
  * Barn Door Equatorial Mount
  * 
  * TODO / CONSIDER
- *  - microstep mode (on normal run?) to reduce vibration / jitter
  * 
  */
 #define LED_PIN          13
@@ -39,11 +38,22 @@
 // fast = 800      120
 // slow = 200/6    1/5
 
+/* Driver microstep control
+ * MS1 MS2 MS3 Microstep Resolution
+ *   L   L   L  Full Step
+ *   H   L   L  Half Step
+ *   L   H   L  Quarter Step
+ *   H   H   L  Eigth Step
+ *   H   H   H  Sixteenth Step
+ */
+
 int fastMotorOCR1A    = 40000; // temp; should be 20000;
 int fastMotorPrescale = 0x09;  // ps 1
+int fastMotorMicrostepPattern = 0x00; // full steps
 
 int slowMotorOCR1A    = 1875;
 int slowMotorPrescale = 0x0C;  // ps 256
+int slowMotorMicrostepPattern = 0x00; // full steps
 //=======================================
 
 // null routine
@@ -52,7 +62,7 @@ void idle() {}
 void (* volatile isr)() = idle;
 volatile long lifeCounter = 0;
 volatile long currentPosition = 0;
-volatile long maxPosition = 800; // DEFAULT_MAX_POSITION;
+volatile long maxPosition = DEFAULT_MAX_POSITION;
 
 // trigger the motor routine 
 void stepMotor()
@@ -128,6 +138,12 @@ void startMotorInterrupts() {
   TIMSK1 |= (1 << OCIE1A);
 }
 
+void setMicrostepBitPattern(int pattern) {
+  digitalWrite(STEP_SIZE_MS1_PIN, pattern & 1);
+  digitalWrite(STEP_SIZE_MS2_PIN, (pattern >> 1) & 1);
+  digitalWrite(STEP_SIZE_MS3_PIN, (pattern >> 2) & 1);
+}
+
 void motorControl(int direction, int speed) {
   int dirBit = (direction == MOTOR_OUT) ? 1 : 0;
   digitalWrite(DIRECTION_PIN, dirBit);
@@ -138,12 +154,14 @@ void motorControl(int direction, int speed) {
     TCNT1 = 0;
     tccr1bTemplate |= fastMotorPrescale;
     TCCR1B = tccr1bTemplate;
+    setMicrostepBitPattern(fastMotorMicrostepPattern);
   } else {
     TCCR1A = 0;
     OCR1A = slowMotorOCR1A;
     TCNT1 = 0;
     tccr1bTemplate |= slowMotorPrescale;
     TCCR1B = tccr1bTemplate;
+    setMicrostepBitPattern(slowMotorMicrostepPattern);
   }
 }
 
