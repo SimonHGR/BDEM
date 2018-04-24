@@ -36,6 +36,12 @@ int slowMotorOCR1A    = 1875;
 int slowMotorPrescale = 0x0C;  // ps 256
 //=======================================
 
+// null routine
+void idle() {}
+
+void (* volatile isr)() = idle;
+volatile int lifeCounter = 0;
+
 // trigger the motor routine 
 void stepMotor()
 {
@@ -43,11 +49,35 @@ void stepMotor()
   digitalWrite(STEP_PIN, LOW);
 }
 
-// null routine
-void idle() {}
+// stepping until stop pin
+void stepToStopISR() {
+  stepMotor();
+  if (digitalRead(STOP_PIN) == 0) {
+    setModeWaitToStart();
+  }
+}
 
-void (* volatile isr)() = stepMotor;
-volatile int lifeCounter = 0;
+// wait until control pin then start
+void waitToStartISR() {
+  if (digitalRead(CONTROL_PIN) == 0) {
+    isr = waitStartReleaseISR;
+  }
+}
+
+// wait until control pin released then start
+void waitStartReleaseISR() {
+  if (digitalRead(CONTROL_PIN) == 1) {
+    setModeRunning();
+  }
+}
+
+// running until control pin
+void stepToControlISR() {
+  stepMotor();
+  if (digitalRead(CONTROL_PIN) == 0) {
+    setModeRewinding();
+  }
+}
 
 // master interrupt service routine 
 ISR(TIMER1_COMPA_vect)
@@ -69,44 +99,59 @@ void startMotorInterrupts() {
 }
 
 void motorControl(int direction, int speed) {
-  if (speed == MOTOR_STOP) {
-    Serial.println("Stopping!");
-    stopMotorInterrupts();
-  } else {
-    Serial.println("Not stopping!");
-    int dirBit = (direction == MOTOR_OUT) ? 1 : 0;
-    Serial.print("direction is ");
-    Serial.println(dirBit);
-    digitalWrite(DIRECTION_PIN, dirBit);
-    int tccr1bTemplate = TCCR1B & TCCR1B_PRESCALE_MASK;
-    Serial.print("tccr1bTemplate ");
+//  Serial.print("motor control ");
+  int dirBit = (direction == MOTOR_OUT) ? 1 : 0;
+//  Serial.print("direction is ");
+//  Serial.println(dirBit);
+  digitalWrite(DIRECTION_PIN, dirBit);
+  int tccr1bTemplate = TCCR1B & TCCR1B_PRESCALE_MASK;
+//  Serial.print("tccr1bTemplate ");
+//  Serial.println(tccr1bTemplate);
+  if (speed == MOTOR_FAST) {
+    TCCR1A = 0;
+    OCR1A = fastMotorOCR1A;
+    TCNT1 = 0;
+    tccr1bTemplate |= fastMotorPrescale;
+    TCCR1B = tccr1bTemplate;
+    Serial.print("(fast) tccr1b => ");
     Serial.println(tccr1bTemplate);
-    if (speed == MOTOR_FAST) {
-      TCCR1A = 0;
-      OCR1A = fastMotorOCR1A;
-      TCNT1 = 0;
-      tccr1bTemplate |= fastMotorPrescale;
-      TCCR1B = tccr1bTemplate;
-      Serial.print("(fast) tccr1b => ");
-      Serial.println(tccr1bTemplate);
-    } else {
-      TCCR1A = 0;
-      OCR1A = slowMotorOCR1A;
-      TCNT1 = 0;
-      tccr1bTemplate |= slowMotorPrescale;
-      TCCR1B = tccr1bTemplate;
-      Serial.print("(slow) tccr1b => ");
-      Serial.println(tccr1bTemplate);
-    }
-    startMotorInterrupts();
+  } else {
+    TCCR1A = 0;
+    OCR1A = slowMotorOCR1A;
+    TCNT1 = 0;
+    tccr1bTemplate |= slowMotorPrescale;
+    TCCR1B = tccr1bTemplate;
+    Serial.print("(slow) tccr1b => ");
+    Serial.println(tccr1bTemplate);
   }
 }
 
-void modeResetPosition() {
+//void modeResetPosition() {
+//  motorControl(MOTOR_RETURN, MOTOR_FAST);
+//  // await input from limit switch
+//  // then stop motor
+//  // set mode "idle"
+//}
+
+void setModeRewinding() {
+//  noInterrupts();
   motorControl(MOTOR_RETURN, MOTOR_FAST);
-  // await input from limit switch
-  // then stop motor
-  // set mode "idle"
+  isr = stepToStopISR;
+//  interrupts();
+}
+
+void setModeWaitToStart() {
+//  noInterrupts();
+  motorControl(MOTOR_OUT, MOTOR_SLOW); // get ready
+  isr = waitToStartISR;
+//  interrupts();
+}
+
+void setModeRunning() {
+//  noInterrupts();
+  motorControl(MOTOR_OUT, MOTOR_SLOW);
+  isr = stepToControlISR;
+//  interrupts();
 }
 
 void setup() {
@@ -117,14 +162,20 @@ void setup() {
   pinMode(DIRECTION_PIN, OUTPUT);
   pinMode(STEP_PIN, OUTPUT);
   pinMode(MOTOR_ENABLE, OUTPUT);
+
   pinMode(STEP_SIZE_MS1_PIN, OUTPUT);
   pinMode(STEP_SIZE_MS2_PIN, OUTPUT);
   pinMode(STEP_SIZE_MS3_PIN, OUTPUT);
+
+  pinMode(STOP_PIN, INPUT_PULLUP);
+  pinMode(CONTROL_PIN, INPUT_PULLUP);
+
   digitalWrite(STEP_SIZE_MS1_PIN, LOW);
   digitalWrite(STEP_SIZE_MS2_PIN, LOW);
   digitalWrite(STEP_SIZE_MS3_PIN, LOW);
 
-  modeResetPosition();
+  setModeRewinding();
+  startMotorInterrupts();
 }
 
 char inData[128];
@@ -139,11 +190,11 @@ void loop() {
       Serial.print(inData);
       if (strcmp(inData, "stop") == 0) {
         Serial.println("stopping...");
-        motorControl(MOTOR_OUT, MOTOR_STOP);
-      } else if (strcmp(inData, "ff") == 0) {
-        motorControl(MOTOR_RETURN, MOTOR_FAST);
-      } else if (strcmp(inData, "sr") == 0) {
-        motorControl(MOTOR_OUT, MOTOR_SLOW);
+        setModeWaitToStart();
+      } else if (strcmp(inData, "rew") == 0) {
+        setModeRewinding();
+      } else if (strcmp(inData, "run") == 0) {
+        setModeRunning();
       }
       dataCount = 0;
     } else {
