@@ -3,12 +3,12 @@
  * Barn Door Equatorial Mount
  * 
  * TODO / CONSIDER
- *  - software end stop at 500 x 400 steps (approx 5" travel on
+ *  - limit run by step count
+ *    software end stop at 500 x 400 steps (approx 5" travel on
  *    20 tpi screw, with 5:1 step down and 400 steps / revolution)
  *  - from running, stop on first press of control button, enter
  *    rewind mode on a second press
  *  - microstep mode (on normal run?) to reduce vibration / jitter
- *  - limit run by step count
  * 
  */
 #define LED_PIN          13
@@ -88,8 +88,22 @@ void waitStartReleaseISR() {
 void stepToControlISR() {
   stepMotor();
   if (digitalRead(CONTROL_PIN) == 0) {
-    setModeRewinding();
+    isr = waitForControlReleaseOnStopISR;
   }
+}
+
+// wait for control release prior to second press for rewind
+void waitForControlReleaseOnStopISR() {
+  if (digitalRead(CONTROL_PIN) == 1) {
+    isr = waitToRewindISR;
+  }  
+}
+
+// waiting to start rewind
+void waitToRewindISR() {
+  if (digitalRead(CONTROL_PIN) == 0) {
+    setModeRewinding();
+  }  
 }
 
 // master interrupt service routine 
