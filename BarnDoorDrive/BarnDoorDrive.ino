@@ -1,6 +1,11 @@
 /*
  * Stepper motor driver for
  * Barn Door Equatorial Mount
+ * 
+ * TODO / CONSIDER
+ *  - microstep mode (on normal run?) to reduce vibration / jitter
+ *  - limit run by step count
+ * 
  */
 #define LED_PIN          13
 
