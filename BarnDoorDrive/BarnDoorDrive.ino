@@ -3,11 +3,6 @@
  * Barn Door Equatorial Mount
  * 
  * TODO / CONSIDER
- *  - limit run by step count
- *    software end stop at 500 x 400 steps (approx 5" travel on
- *    20 tpi screw, with 5:1 step down and 400 steps / revolution)
- *  - from running, stop on first press of control button, enter
- *    rewind mode on a second press
  *  - microstep mode (on normal run?) to reduce vibration / jitter
  * 
  */
@@ -30,6 +25,12 @@
 #define MOTOR_SLOW   1
 #define MOTOR_FAST   2
 
+// 400 steps per drive revoltion
+// 5 drive revolution per 1 turn
+// 20 turns per inch
+// 5 inches nominal max screw
+// max range = 400 x 5 x 20 x 5 => 200000
+#define DEFAULT_MAX_POSITION 200000
 #define TCCR1B_PRESCALE_MASK 0xE0
 
 //=======================================
@@ -49,8 +50,9 @@ int slowMotorPrescale = 0x0C;  // ps 256
 void idle() {}
 
 void (* volatile isr)() = idle;
-volatile int lifeCounter = 0;
-volatile int currentPosition = 0;
+volatile long lifeCounter = 0;
+volatile long currentPosition = 0;
+volatile long maxPosition = 800; // DEFAULT_MAX_POSITION;
 
 // trigger the motor routine 
 void stepMotor()
@@ -87,7 +89,8 @@ void waitStartReleaseISR() {
 // running until control pin
 void stepToControlISR() {
   stepMotor();
-  if (digitalRead(CONTROL_PIN) == 0) {
+  if (currentPosition >= maxPosition
+    || digitalRead(CONTROL_PIN) == 0) {
     isr = waitForControlReleaseOnStopISR;
   }
 }
@@ -150,6 +153,12 @@ void setModeRewinding() {
   isr = stepToStopISR;
 }
 
+void setModeFastForward() {
+  Serial.println("FastForward mode...");
+  motorControl(MOTOR_OUT, MOTOR_FAST);
+  isr = stepToControlISR;
+}
+
 void setModeWaitToStart() {
   Serial.println("Wait for start mode...");
   motorControl(MOTOR_OUT, MOTOR_SLOW); // get ready
@@ -200,9 +209,20 @@ void loop() {
         setModeRewinding();
       } else if (strcmp(inData, "run") == 0) {
         setModeRunning();
+      } else if (strcmp(inData, "ff") == 0) {
+        setModeFastForward();
       } else if (strcmp(inData, "pos") == 0) {
         Serial.print("Position: " );
         Serial.println(currentPosition);
+      } else if (strcmp(inData, "limit") == 0) {
+        Serial.print("Setting limit at current position: " );
+        Serial.println(currentPosition);
+        maxPosition = currentPosition;
+      } else if (strcmp(inData, "unlimit") == 0) {
+        Serial.println("Setting default limit position" );
+        maxPosition = DEFAULT_MAX_POSITION;
+      } else {
+        Serial.println("Huh?");
       }
       dataCount = 0;
     } else {
