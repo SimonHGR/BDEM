@@ -3,6 +3,10 @@
  * Barn Door Equatorial Mount
  * 
  * TODO / CONSIDER
+ *  - software end stop at 500 x 400 steps (approx 5" travel on
+ *    20 tpi screw, with 5:1 step down and 400 steps / revolution)
+ *  - from running, stop on first press of control button, enter
+ *    rewind mode on a second press
  *  - microstep mode (on normal run?) to reduce vibration / jitter
  *  - limit run by step count
  * 
