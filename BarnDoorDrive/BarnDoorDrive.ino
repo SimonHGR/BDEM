@@ -7,6 +7,10 @@
 #define DIRECTION_PIN     3
 #define STEP_PIN          2
 #define MOTOR_ENABLE      7
+
+#define STOP_PIN          8
+#define CONTROL_PIN       9
+
 #define STEP_SIZE_MS1_PIN 4
 #define STEP_SIZE_MS2_PIN 5
 #define STEP_SIZE_MS3_PIN 6
@@ -25,19 +29,32 @@
 // fast = 800      120
 // slow = 200/6    1/5
 
-int fastMotorOCR1A    = 20000;
+int fastMotorOCR1A    = 40000; // temp; should be 20000;
 int fastMotorPrescale = 0x09;  // ps 1
 
 int slowMotorOCR1A    = 1875;
 int slowMotorPrescale = 0x0C;  // ps 256
 //=======================================
 
-// interrupt service routine 
-ISR(TIMER1_COMPA_vect)
+// trigger the motor routine 
+void stepMotor()
 {
-  digitalWrite(LED_PIN, digitalRead(LED_PIN) ^ 1);
   digitalWrite(STEP_PIN, HIGH);
   digitalWrite(STEP_PIN, LOW);
+}
+
+void (* volatile isr)() = stepMotor;
+volatile int lifeCounter = 0;
+
+// master interrupt service routine 
+ISR(TIMER1_COMPA_vect)
+{
+  lifeCounter++;
+  if (lifeCounter % 8 == 0) {
+      digitalWrite(LED_PIN, digitalRead(LED_PIN) ^ 1);
+  }
+  // call supporting behavior
+  (*isr)();
 }
 
 void stopMotorInterrupts() {
