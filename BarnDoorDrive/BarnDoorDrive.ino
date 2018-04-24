@@ -67,9 +67,10 @@ void modeResetPosition() {
 
 void setup() {
   Serial.begin(9600);
+  Serial.println("Say Something");
 
   // Set mode "resetting position"
-  modeResetPosition();
+//  modeResetPosition();
 }
 
 char inData[128];
